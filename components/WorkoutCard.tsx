@@ -1,5 +1,13 @@
+import React, { useMemo, useState } from 'react';
+import {
+  LayoutAnimation,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-import React, { useState } from 'react';
 import { WorkoutSession } from '../types';
 import { ChevronDownIcon, EditIcon, TrashIcon } from './icons/Icons';
 
@@ -12,60 +20,174 @@ interface WorkoutCardProps {
 const WorkoutCard: React.FC<WorkoutCardProps> = ({ workout, onEdit, onDelete }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const workoutDate = new Date(workout.date);
-  const formattedDate = workoutDate.toLocaleDateString(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  
-  const totalSets = workout.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
-  const totalVolume = workout.exercises.reduce((acc, ex) => 
-    acc + ex.sets.reduce((setAcc, set) => setAcc + (set.reps * set.weight), 0), 
-  0);
+  const formattedDate = useMemo(() => {
+    const date = new Date(workout.date);
+    return date.toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }, [workout.date]);
+
+  const totalSets = useMemo(
+    () => workout.exercises.reduce((acc, exercise) => acc + exercise.sets.length, 0),
+    [workout.exercises]
+  );
+
+  const totalVolume = useMemo(
+    () =>
+      workout.exercises.reduce(
+        (acc, exercise) =>
+          acc + exercise.sets.reduce((setAcc, set) => setAcc + set.reps * set.weight, 0),
+        0
+      ),
+    [workout.exercises]
+  );
+
+  const toggleExpanded = () => {
+    if (Platform.OS !== 'web') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    setIsExpanded((previous) => !previous);
+  };
 
   return (
-    <div className="bg-dark-card rounded-lg shadow-lg overflow-hidden transition-all duration-300">
-      <div className="p-4 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm text-brand-accent font-semibold">{formattedDate}</p>
-            <h3 className="text-xl font-bold text-dark-text-primary">{workout.name || 'Untitled Workout'}</h3>
-            <p className="text-sm text-dark-text-secondary">
-              {workout.exercises.length} Exercises • {totalSets} Sets • {totalVolume.toLocaleString()} kg Volume
-            </p>
-          </div>
-          <ChevronDownIcon className={`w-6 h-6 text-dark-text-secondary transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-        </div>
-      </div>
+    <View style={styles.card}>
+      <TouchableOpacity onPress={toggleExpanded} style={styles.cardHeader}>
+        <View style={styles.cardHeaderText}>
+          <Text style={styles.cardDate}>{formattedDate}</Text>
+          <Text style={styles.cardTitle}>{workout.name || 'Untitled Workout'}</Text>
+          <Text style={styles.cardMeta}>
+            {workout.exercises.length} Exercises • {totalSets} Sets • {Math.round(totalVolume)} kg Volume
+          </Text>
+        </View>
+        <View style={[styles.iconContainer, isExpanded && styles.iconRotated]}>
+          <ChevronDownIcon size={20} color="#cbd5f5" />
+        </View>
+      </TouchableOpacity>
+
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-dark-border animate-fade-in">
-          {workout.exercises.map((exercise, index) => (
-            <div key={index} className="mt-4">
-              <h4 className="font-semibold text-lg text-dark-text-primary">{exercise.name}</h4>
-              <ul className="text-sm text-dark-text-secondary mt-1 ml-2">
-                {exercise.sets.map((set, setIndex) => (
-                  <li key={setIndex} className="flex justify-between py-1 border-b border-dark-bg">
-                    <span>Set {setIndex + 1}</span>
-                    <span className="font-mono">{set.weight} kg x {set.reps} reps</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        <View style={styles.cardBody}>
+          {workout.exercises.map((exercise) => (
+            <View key={exercise.id} style={styles.exerciseContainer}>
+              <Text style={styles.exerciseTitle}>{exercise.name}</Text>
+              {exercise.sets.map((set, index) => (
+                <View key={set.id} style={styles.setRow}>
+                  <Text style={styles.setLabel}>Set {index + 1}</Text>
+                  <Text style={styles.setValue}>
+                    {set.weight} kg × {set.reps} reps
+                  </Text>
+                </View>
+              ))}
+            </View>
           ))}
-          <div className="flex justify-end gap-2 mt-4">
-             <button onClick={() => onEdit(workout)} className="p-2 text-dark-text-secondary hover:text-brand-accent transition-colors rounded-full hover:bg-dark-bg">
-                <EditIcon className="w-5 h-5"/>
-             </button>
-             <button onClick={() => onDelete(workout.id)} className="p-2 text-dark-text-secondary hover:text-red-500 transition-colors rounded-full hover:bg-dark-bg">
-                <TrashIcon className="w-5 h-5"/>
-             </button>
-          </div>
-        </div>
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => onEdit(workout)}>
+              <EditIcon size={20} color="#60a5fa" />
+              <Text style={styles.actionText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => onDelete(workout.id)}>
+              <TrashIcon size={20} color="#f87171" />
+              <Text style={styles.actionText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
-    </div>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#111c33',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#1f2a44',
+    marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  cardHeaderText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cardDate: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#38bdf8',
+    textTransform: 'uppercase',
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginTop: 4,
+  },
+  cardMeta: {
+    fontSize: 13,
+    color: '#cbd5f5',
+    marginTop: 6,
+  },
+  iconContainer: {
+    transform: [{ rotate: '0deg' }],
+  },
+  iconRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  cardBody: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1f2a44',
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+  },
+  exerciseContainer: {
+    marginTop: 18,
+  },
+  exerciseTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f1f5f9',
+    marginBottom: 8,
+  },
+  setRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1f2a44',
+  },
+  setLabel: {
+    fontSize: 14,
+    color: '#cbd5f5',
+  },
+  setValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#f8fafc',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+  },
+  actionText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#cbd5f5',
+  },
+});
 
 export default WorkoutCard;

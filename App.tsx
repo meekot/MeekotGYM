@@ -1,95 +1,221 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  SafeAreaView,
+  StatusBar as NativeStatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  UIManager,
+  View,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 
-import React, { useState, useCallback } from 'react';
 import { WorkoutSession } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { usePersistentStorage } from './hooks/usePersistentStorage';
 import WorkoutHistory from './components/WorkoutHistory';
 import WorkoutForm from './components/WorkoutForm';
-import { PlusIcon, HistoryIcon } from './components/icons/Icons';
 
 type View = 'history' | 'logging';
 
 const App: React.FC = () => {
-  const [workouts, setWorkouts] = useLocalStorage<WorkoutSession[]>('workouts', []);
+  const [workouts, setWorkouts, isHydrated] = usePersistentStorage<WorkoutSession[]>(
+    'workouts',
+    []
+  );
   const [currentView, setCurrentView] = useState<View>('history');
   const [editingWorkout, setEditingWorkout] = useState<WorkoutSession | null>(null);
 
-  const handleSaveWorkout = useCallback((workout: WorkoutSession) => {
-    // Check if it's an existing workout being edited
-    const existingIndex = workouts.findIndex(w => w.id === workout.id);
-    if (existingIndex > -1) {
-        const updatedWorkouts = [...workouts];
-        updatedWorkouts[existingIndex] = workout;
-        setWorkouts(updatedWorkouts);
-    } else {
-        setWorkouts(prevWorkouts => [workout, ...prevWorkouts]);
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
     }
-    setCurrentView('history');
-    setEditingWorkout(null);
-  }, [workouts, setWorkouts]);
+  }, []);
 
-  const handleStartNewWorkout = () => {
+  const handleSaveWorkout = useCallback(
+    (workout: WorkoutSession) => {
+      setWorkouts((previous) => {
+        const existingIndex = previous.findIndex((item) => item.id === workout.id);
+        if (existingIndex >= 0) {
+          const updated = [...previous];
+          updated[existingIndex] = workout;
+          return updated;
+        }
+        return [workout, ...previous];
+      });
+      setCurrentView('history');
+      setEditingWorkout(null);
+    },
+    [setWorkouts]
+  );
+
+  const handleStartNewWorkout = useCallback(() => {
     setEditingWorkout(null);
     setCurrentView('logging');
-  };
-  
-  const handleEditWorkout = (workout: WorkoutSession) => {
+  }, []);
+
+  const handleEditWorkout = useCallback((workout: WorkoutSession) => {
     setEditingWorkout(workout);
     setCurrentView('logging');
-  };
+  }, []);
 
-  const handleDeleteWorkout = (workoutId: string) => {
-    if(window.confirm('Are you sure you want to delete this workout?')) {
-        setWorkouts(workouts.filter(w => w.id !== workoutId));
-    }
-  };
-
-  const Header = () => (
-    <header className="bg-dark-card p-4 shadow-lg sticky top-0 z-10 flex justify-between items-center">
-      <div className="flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-brand-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M20.57 14.86L22 13.43L20.57 12L17 15.57L8.43 7L12 3.43L10.57 2L9.14 3.43L7.71 2L5.57 4.14L4.14 2.71L2.71 4.14L4.14 5.57L2 7.71L3.43 9.14L2 10.57L3.43 12L7 8.43L15.57 17L12 20.57L13.43 22L14.86 20.57L16.29 22L18.43 19.86L19.86 21.29L21.29 19.86L19.86 18.43L22 16.29L20.57 14.86Z" /></svg>
-        <h1 className="text-2xl font-bold text-dark-text-primary">Gym Tracker</h1>
-      </div>
-      {currentView === 'logging' && (
-         <button onClick={() => setCurrentView('history')} className="flex items-center gap-2 px-4 py-2 bg-dark-bg text-brand-accent rounded-lg hover:bg-slate-600 transition-colors">
-            <HistoryIcon className="w-5 h-5" />
-            <span>History</span>
-        </button>
-      )}
-    </header>
+  const handleDeleteWorkout = useCallback(
+    (workoutId: string) => {
+      Alert.alert('Delete workout', 'Are you sure you want to delete this workout?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setWorkouts((previous) => previous.filter((workout) => workout.id !== workoutId));
+          },
+        },
+      ]);
+    },
+    [setWorkouts]
   );
+
+  if (!isHydrated) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#60a5fa" />
+          <Text style={styles.loadingText}>Loading your sessions…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-dark-bg font-sans">
-      <Header />
-      <main className="p-4 pb-24">
-        {currentView === 'history' && (
-          <WorkoutHistory 
-            workouts={workouts} 
-            onEdit={handleEditWorkout}
-            onDelete={handleDeleteWorkout}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Ionicons name="barbell" size={28} color="#60a5fa" />
+            <Text style={styles.headerTitle}>Gym Tracker</Text>
+          </View>
+          {currentView === 'logging' && (
+            <TouchableOpacity
+              onPress={() => setCurrentView('history')}
+              style={styles.headerButton}
+            >
+              <Ionicons name="time-outline" size={18} color="#f9fafb" />
+              <Text style={styles.headerButtonText}>History</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.content}>
+          {currentView === 'history' ? (
+            <WorkoutHistory workouts={workouts} onEdit={handleEditWorkout} onDelete={handleDeleteWorkout} />
+          ) : (
+            <WorkoutForm
+              onSave={handleSaveWorkout}
+              onCancel={() => {
+                setCurrentView('history');
+                setEditingWorkout(null);
+              }}
+              existingWorkout={editingWorkout}
             />
-        )}
-        {currentView === 'logging' && (
-          <WorkoutForm 
-            onSave={handleSaveWorkout} 
-            onCancel={() => { setCurrentView('history'); setEditingWorkout(null); }}
-            existingWorkout={editingWorkout}
-          />
-        )}
-      </main>
-      {currentView === 'history' && (
-        <div className="fixed bottom-6 right-6">
-          <button
-            onClick={handleStartNewWorkout}
-            className="bg-brand-primary text-white rounded-full p-4 shadow-lg hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-bg focus:ring-brand-accent transition-transform duration-200 ease-in-out hover:scale-110"
-            aria-label="Start new workout"
+          )}
+        </View>
+
+        {currentView === 'history' && (
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={handleStartNewWorkout}
+            accessibilityRole="button"
+            accessibilityLabel="Start new workout"
           >
-            <PlusIcon className="h-8 w-8" />
-          </button>
-        </div>
-      )}
-    </div>
+            <Ionicons name="add" size={30} color="#ffffff" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight ?? 0 : 0,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#111c33',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1f2a44',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginLeft: 12,
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  headerButtonText: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  fab: {
+    position: 'absolute',
+    right: 24,
+    bottom: 32,
+    backgroundColor: '#2563eb',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+  },
+  loadingText: {
+    color: '#cbd5f5',
+    fontSize: 16,
+    marginTop: 12,
+  },
+});
 
 export default App;

@@ -8,9 +8,21 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
-dist-ssr
+.expo
+.expo-shared
+.dist
+web-build
+server/node_modules
+server/dist
+
 *.local
+.env
+.env.development
+.env.production
+.env.test
+!.env.example
+server/.env
+!server/.env.example
 
 # Editor directories and files
 .vscode/*
