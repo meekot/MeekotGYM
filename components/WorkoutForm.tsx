@@ -1,6 +1,7 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import React, { useState, useEffect } from 'react';
-import { WorkoutSession, Exercise } from '../types';
+import { Exercise, WorkoutSession } from '../types';
 import ExerciseForm from './ExerciseForm';
 import { PlusIcon } from './icons/Icons';
 
@@ -10,76 +11,101 @@ interface WorkoutFormProps {
   existingWorkout: WorkoutSession | null;
 }
 
+const createEmptyWorkout = (): WorkoutSession => ({
+  id: Date.now().toString(),
+  date: new Date().toISOString(),
+  name: `Workout ${new Date().toLocaleDateString()}`,
+  exercises: [],
+});
+
+const cloneWorkout = (session: WorkoutSession): WorkoutSession => ({
+  ...session,
+  exercises: session.exercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) => ({ ...set })),
+  })),
+});
+
 const WorkoutForm: React.FC<WorkoutFormProps> = ({ onSave, onCancel, existingWorkout }) => {
   const [workout, setWorkout] = useState<WorkoutSession>(
-    existingWorkout || {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      name: `Workout ${new Date().toLocaleDateString()}`,
-      exercises: [],
-    }
+    existingWorkout ? cloneWorkout(existingWorkout) : createEmptyWorkout()
   );
 
   useEffect(() => {
     if (existingWorkout) {
-      setWorkout(existingWorkout);
+      setWorkout(cloneWorkout(existingWorkout));
+    } else {
+      setWorkout(createEmptyWorkout());
     }
   }, [existingWorkout]);
 
+  const title = useMemo(() => (existingWorkout ? 'Edit Workout' : 'Log New Workout'), [existingWorkout]);
+
   const handleExerciseChange = (updatedExercise: Exercise) => {
-    setWorkout(prevWorkout => ({
-      ...prevWorkout,
-      exercises: prevWorkout.exercises.map(ex =>
-        ex.id === updatedExercise.id ? updatedExercise : ex
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: prev.exercises.map((exercise) =>
+        exercise.id === updatedExercise.id ? updatedExercise : exercise
       ),
     }));
   };
 
   const addExercise = () => {
+    const timestamp = Date.now().toString();
     const newExercise: Exercise = {
-      id: Date.now().toString(),
+      id: `${timestamp}-${Math.random()}`,
       name: '',
-      sets: [{ id: Date.now().toString(), reps: 8, weight: 0 }],
+      sets: [
+        {
+          id: `${timestamp}-set-1`,
+          reps: 8,
+          weight: 0,
+        },
+      ],
     };
-    setWorkout(prevWorkout => ({
-      ...prevWorkout,
-      exercises: [...prevWorkout.exercises, newExercise],
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: [...prev.exercises, newExercise],
     }));
   };
 
   const removeExercise = (exerciseId: string) => {
-    setWorkout(prevWorkout => ({
-      ...prevWorkout,
-      exercises: prevWorkout.exercises.filter(ex => ex.id !== exerciseId),
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: prev.exercises.filter((exercise) => exercise.id !== exerciseId),
     }));
   };
-  
+
   const handleSave = () => {
-    // Filter out exercises with no name
-    const cleanedWorkout = {
-        ...workout,
-        exercises: workout.exercises.filter(ex => ex.name.trim() !== '')
-    };
-    if (cleanedWorkout.exercises.length === 0) {
-        alert("Please add at least one exercise.");
-        return;
+    const cleanedExercises = workout.exercises.filter((exercise) => exercise.name.trim().length > 0);
+
+    if (cleanedExercises.length === 0) {
+      Alert.alert('Add an exercise', 'Please add at least one exercise before saving.');
+      return;
     }
-    onSave(cleanedWorkout);
-  }
+
+    onSave({
+      ...workout,
+      exercises: cleanedExercises,
+    });
+  };
 
   return (
-    <div className="bg-dark-card p-4 sm:p-6 rounded-lg shadow-xl space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-dark-text-primary mb-2">
-        {existingWorkout ? 'Edit Workout' : 'Log New Workout'}
-      </h2>
-      <input
-        type="text"
-        value={workout.name}
-        onChange={(e) => setWorkout({ ...workout, name: e.target.value })}
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={styles.title}>{title}</Text>
+      <TextInput
+        style={styles.input}
         placeholder="Workout Name (e.g., Push Day)"
-        className="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+        placeholderTextColor="#94a3b8"
+        value={workout.name ?? ''}
+        onChangeText={(text) => setWorkout((prev) => ({ ...prev, name: text }))}
       />
-      <div className="space-y-4">
+
+      <View>
         {workout.exercises.map((exercise, index) => (
           <ExerciseForm
             key={exercise.id}
@@ -89,30 +115,93 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({ onSave, onCancel, existingWor
             exerciseNumber={index + 1}
           />
         ))}
-      </div>
-      <button
-        onClick={addExercise}
-        className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-dark-bg hover:bg-slate-600 text-brand-accent rounded-lg transition-colors"
-      >
-        <PlusIcon className="w-5 h-5" />
-        <span>Add Exercise</span>
-      </button>
-      <div className="flex justify-end gap-4 mt-6">
-        <button
-          onClick={onCancel}
-          className="py-2 px-6 bg-dark-border text-dark-text-primary rounded-lg hover:bg-slate-500 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          className="py-2 px-6 bg-brand-primary text-white rounded-lg hover:bg-brand-secondary transition-colors"
-        >
-          {existingWorkout ? 'Update Workout' : 'Save Workout'}
-        </button>
-      </div>
-    </div>
+      </View>
+
+      <TouchableOpacity style={styles.addExerciseButton} onPress={addExercise}>
+        <PlusIcon size={18} color="#38bdf8" />
+        <Text style={styles.addExerciseText}>Add Exercise</Text>
+      </TouchableOpacity>
+
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+          <Text style={styles.saveText}>{existingWorkout ? 'Update Workout' : 'Save Workout'}</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+  },
+  container: {
+    paddingBottom: 120,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    marginBottom: 20,
+  },
+  input: {
+    backgroundColor: '#1f2a44',
+    color: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#334155',
+  },
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#334155',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  addExerciseText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#38bdf8',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 24,
+  },
+  cancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#475569',
+    marginRight: 12,
+  },
+  cancelText: {
+    color: '#e2e8f0',
+    fontWeight: '600',
+  },
+  saveButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+  },
+  saveText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+});
 
 export default WorkoutForm;

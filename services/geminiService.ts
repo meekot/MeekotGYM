@@ -1,41 +1,49 @@
-
-import { GoogleGenAI } from "@google/genai";
-
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  console.error("API_KEY is not set. Please set the API_KEY environment variable.");
+export interface ExerciseSuggestionResult {
+  success: boolean;
+  exercise?: string;
+  message?: string;
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3333';
 
-export const getExerciseSuggestion = async (muscleGroup: string): Promise<string> => {
-  if (!API_KEY) {
-    return "API Key not configured.";
-  }
+export const getExerciseSuggestion = async (
+  muscleGroup: string
+): Promise<ExerciseSuggestionResult> => {
   if (!muscleGroup.trim()) {
-    return "Please specify a muscle group.";
+    return { success: false, message: 'Please specify a muscle group.' };
   }
 
   try {
-    const prompt = `You are a fitness expert. Suggest a single, effective gym exercise for the following muscle group: "${muscleGroup}". Provide only the name of the exercise. For example, if the muscle group is "chest", a good response would be "Bench Press".`;
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        // Disable thinking for faster, more direct responses
-        thinkingConfig: { thinkingBudget: 0 }
-      }
+    const response = await fetch(`${API_BASE_URL}/suggest-exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ muscleGroup }),
     });
 
-    const text = response.text.trim();
-    
-    // Basic cleanup to remove potential markdown or extra quotes
-    return text.replace(/["*`]/g, '');
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        message: errorText || 'The suggestion service is unavailable. Please try again later.',
+      };
+    }
 
+    const data = await response.json();
+    if (data?.suggestion) {
+      return { success: true, exercise: data.suggestion };
+    }
+
+    return {
+      success: false,
+      message: data?.message ?? 'No suggestion was returned. Please try again.',
+    };
   } catch (error) {
-    console.error("Error fetching exercise suggestion:", error);
-    return "Couldn't get a suggestion. Please try again.";
+    console.error('Error fetching exercise suggestion:', error);
+    return {
+      success: false,
+      message: 'Unable to reach the suggestion service. Please try again later.',
+    };
   }
 };
