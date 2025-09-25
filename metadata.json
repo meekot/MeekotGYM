@@ -1,0 +1,5 @@
+{
+  "name": "Gym Session Tracker",
+  "description": "A mobile-first application to track your gym sessions, log exercises, sets, reps, and weights, and view your workout history. Includes an AI-powered exercise suggestion feature.",
+  "requestFramePermissions": []
+}
